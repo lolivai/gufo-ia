@@ -15,6 +15,7 @@
   openssl,
   ffmpeg-headless,
   ccache,
+  sccache,
   rustToolchain,
   rustPlatform,
   rocmPackages,
@@ -95,6 +96,7 @@ stdenv.mkDerivation {
     ninja
     pkg-config
     makeWrapper
+    sccache
     rustToolchain
     rocmPackages.clr
   ];
@@ -150,6 +152,9 @@ stdenv.mkDerivation {
   postBuild = ''
     if [[ -n "''${CCACHE_DIR:-}" ]]; then
       ${ccache}/bin/ccache --show-stats
+    fi
+    if [[ -n "''${SCCACHE_DIR:-}" ]]; then
+      sccache --show-stats
     fi
   '';
 

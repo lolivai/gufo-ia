@@ -24,6 +24,12 @@
     extra-trusted-public-keys = [
       "gufo.cachix.org-1:rfZe3n4lHINgyoACKzs5EthIZmBNvEyCCtufUpth0PE="
     ];
+    # Expose the persistent compiler caches (C/C++ and Rust) to sandboxed
+    # builds for trusted users, so a local `nix flake check` hits them once
+    # the directories exist; untrusted users keep their own nix.conf choice
+    # and the checks simply build without the caches. Entries append to the
+    # user's configured list, they do not replace it.
+    extra-sandbox-paths = [ "/tmp/gufo-ccache" "/tmp/gufo-sccache" ];
   };
 
   outputs =
@@ -298,6 +304,7 @@
               pkgsSys.libjpeg
               pkgsSys.libwebp
               rustToolchain
+              pkgsSys.sccache
               pkgsSys.libsndfile
               pkgsSys.soxr
               pkgsSys.ffmpeg-headless
@@ -419,6 +426,7 @@
               pkgsSys.libjpeg
               pkgsSys.libwebp
               rustToolchain
+              pkgsSys.sccache
               pkgsSys.libsndfile
               pkgsSys.soxr
               pkgsSys.ffmpeg-headless
@@ -467,6 +475,10 @@
 
             if [[ -n "$ccache_launcher" ]]; then
               ccache --show-stats
+            fi
+
+            if [[ -n "''${SCCACHE_DIR:-}" ]]; then
+              sccache --show-stats
             fi
 
             mkdir -p $out
@@ -752,6 +764,10 @@
               export CCACHE_COMPILERCHECK=content
               export CCACHE_MAXSIZE=2G
               export CCACHE_NOHASHDIR=true
+              # Persistent compiler caches for sandboxed builds. The flake's
+              # nixConfig exposes these paths to trusted users, so a first
+              # `nix flake check` fills them and later runs reuse the objects.
+              install -d -m 1777 /tmp/gufo-ccache /tmp/gufo-sccache 2>/dev/null || true
             '';
           };
         }

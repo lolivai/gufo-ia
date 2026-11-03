@@ -67,6 +67,17 @@ must match unless the case is in `kKnownDeviations`. It runs in `check-pr`.
 the `.png` files under each directory and prints the median decode time of both
 decoders per file. CTest does not run this mode.
 
+Cargo builds cache crate objects through sccache when a persistent
+`/tmp/gufo-sccache` directory is visible in the Nix sandbox, mirroring the
+`/tmp/gufo-ccache` policy for C/C++. No local setup is required: the flake's
+`nixConfig` exposes both directories to the sandbox of trusted users and
+`nix develop` creates them, so the first `nix flake check` from a clone
+fills the caches and later runs reuse the objects. Where the user is not a
+Nix trusted user, the sandbox cannot see host caches and the checks build
+without them; only the unchanged-code results still come from the store.
+Windows CI caches the decoder through `RUSTC_WRAPPER=sccache`; native builds
+without it rely on Cargo's own target directory.
+
 ## Hosted versus local checks
 
 GitHub runs `nix flake check`: formatting, documentation, dependency inventory,
