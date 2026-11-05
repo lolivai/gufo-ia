@@ -22,8 +22,8 @@ set(GUFO_LINK_GRAPH_FORBIDDEN gufo_serving gufo_http)
 # Link items that name a system library rather than a project target. The
 # platform leaf's own list joins it, so a new OS library stays classified.
 set(GUFO_LINK_GRAPH_SYSTEM_LIBS
-  dl m pthread rt atomic stdc++ gcc_s
-  ws2_32 iphlpapi bcrypt advapi32)
+  dl m pthread rt atomic stdc++ gcc_s util c
+  ws2_32 iphlpapi bcrypt advapi32 kernel32 ntdll userenv dbghelp)
 if (DEFINED GUFO_PLATFORM_LIBS)
   list(APPEND GUFO_LINK_GRAPH_SYSTEM_LIBS ${GUFO_PLATFORM_LIBS})
 endif()

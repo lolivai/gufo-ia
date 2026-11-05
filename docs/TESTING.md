@@ -39,6 +39,45 @@ Selection by preset: `gpu-fast` excludes `slow` and `external-model` tests,
 their documented local artifacts. A skip due to an absent model or device is
 not a quality pass.
 
+## PNG decoding
+
+The Rust decoder uses the toolchain pinned in `rust-toolchain.toml`.
+`nix build .#checks.x86_64-linux.rust` checks rustfmt and clippy offline;
+this check also runs in `check-pr`. Outside Nix, run:
+
+```sh
+cargo fmt --manifest-path src/core/png_decode/Cargo.toml --check
+cargo clippy --manifest-path src/core/png_decode/Cargo.toml --locked --all-targets -- -D warnings
+```
+
+CMake Debug builds use Cargo's development profile. RelWithDebInfo uses an
+optimized profile with full debug information, debug assertions and overflow
+checks; other configurations use the release profile. CMake invokes Cargo on
+every build, leaving incremental rebuild decisions to Cargo, and validates
+Rust's native system-library requirements during configuration. The C++
+sanitizer preset does not instrument the Rust library; it uses the development
+profile when configured as Debug.
+
+`png_decode_test` decodes generated PNGs and chunk edits with `DecodeImage` and
+with a frozen copy of the libpng decoder from 0.28.1 in
+`tests/core/png_reference.cpp`. The pixels, or the exception type and message,
+must match unless the case is in `kKnownDeviations`. It runs in `check-pr`.
+
+`png_decode_test --corpus DIR... [--repeat N]` runs the same comparison over
+the `.png` files under each directory and prints the median decode time of both
+decoders per file. CTest does not run this mode.
+
+Cargo builds cache crate objects through sccache when a persistent
+`/tmp/gufo-sccache` directory is visible in the Nix sandbox, mirroring the
+`/tmp/gufo-ccache` policy for C/C++. No local setup is required: the flake's
+`nixConfig` exposes both directories to the sandbox of trusted users and
+`nix develop` creates them, so the first `nix flake check` from a clone
+fills the caches and later runs reuse the objects. Where the user is not a
+Nix trusted user, the sandbox cannot see host caches and the checks build
+without them; only the unchanged-code results still come from the store.
+Windows CI caches the decoder through `RUSTC_WRAPPER=sccache`; native builds
+without it rely on Cargo's own target directory.
+
 ## Hosted versus local checks
 
 GitHub runs `nix flake check`: formatting, documentation, dependency inventory,

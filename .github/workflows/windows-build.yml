@@ -148,10 +148,10 @@ jobs:
             "$($Matches[1])=$($Matches[2])" >> $env:GITHUB_ENV
           }
 
-      - name: Install Ninja and ccache
+      - name: Install Ninja, ccache and sccache
         run: |
-          choco install ninja ccache -y --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'cannot install ninja and ccache' }
+          choco install ninja ccache sccache -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'cannot install ninja, ccache and sccache' }
 
       # CMakeLists.txt compiles C, CXX and (with clang-cl) HIP through ccache
       # when it is on PATH. The SDK is unpacked fresh each run, so the
@@ -172,6 +172,29 @@ jobs:
           "CCACHE_MAXSIZE=2G" >> $env:GITHUB_ENV
           # GITHUB_ENV applies from the next step on.
           ccache --dir "$env:RUNNER_TEMP\ccache" --zero-stats
+
+      # The Rust PNG decoder compiles through sccache (cargo's ccache). The
+      # checkout path is identical on every run, so rustc command lines repeat
+      # across revisions while the toolchain and Cargo.lock stay unchanged.
+      - name: Restore Rust compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\sccache
+          key: gufo-windows-sccache-v1-${{ hashFiles('rust-toolchain.toml', 'src/core/png_decode/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            gufo-windows-sccache-v1-${{ hashFiles('rust-toolchain.toml', 'src/core/png_decode/Cargo.lock') }}-
+
+      - name: Prepare Rust compiler cache
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\sccache" | Out-Null
+          "RUSTC_WRAPPER=sccache" >> $env:GITHUB_ENV
+          "SCCACHE_DIR=$env:RUNNER_TEMP\sccache" >> $env:GITHUB_ENV
+          # sccache cannot cache incremental artifacts; keep everything cachable.
+          "CARGO_INCREMENTAL=0" >> $env:GITHUB_ENV
+          "SCCACHE_IDLE_TIMEOUT=0" >> $env:GITHUB_ENV
+          # SCCACHE_DIR from GITHUB_ENV applies from the next step on.
+          $env:SCCACHE_DIR = "$env:RUNNER_TEMP\sccache"
+          sccache --zero-stats
 
       - name: Restore vcpkg binary cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -270,6 +293,7 @@ jobs:
           cmake --build --preset windows-release --parallel $env:NUMBER_OF_PROCESSORS --target gufo gufo-server component_text_cache_test qwen38_flash_next_ngram_test gpu_queues_test bandwidth_test allocation_benchmark_test
           if ($LASTEXITCODE -ne 0) { throw 'build failed' }
           ccache --show-stats
+          sccache --show-stats
 
       - name: Run CPU and application checks
         run: |
@@ -486,6 +510,13 @@ jobs:
         with:
           path: ${{ runner.temp }}\ccache
           key: gufo-windows-ccache-v1-${{ env.SDK_TARBALL }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save Rust compiler cache
+        if: always() && steps.configure.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}\sccache
+          key: gufo-windows-sccache-v1-${{ hashFiles('rust-toolchain.toml', 'src/core/png_decode/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save vcpkg binary cache
         if: always() && steps.configure.outcome != 'skipped'
