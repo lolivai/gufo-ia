@@ -180,6 +180,7 @@
           testSource = mkFilteredSource {
             directories = [
               "examples/extension_template"
+              "docs/models"
               "include"
               "schemas"
               "cmake"
@@ -188,6 +189,7 @@
               "tools"
             ];
             files = [
+              "README.md"
               ".clang-format"
               "CMakeLists.txt"
               "extensions.lock"
