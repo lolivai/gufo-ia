@@ -664,6 +664,8 @@ void PrintServeHelp(std::string_view program_name,
     std::string dspark_model_path;
     std::string mtp_model_path;
     std::string vision_model_path;
+    std::string projection_vector_path;
+    std::string projection_layers;
     std::size_t draft_tokens = 7;
     std::size_t min_draft_tokens = 1;
     std::size_t prefill_chunk_tokens =
@@ -754,6 +756,15 @@ void PrintServeHelp(std::string_view program_name,
                      "Path to the Qwen MTP draft GGUF (Qwen3.8-Flash-Next: the "
                      "mtp-...-shared-*.gguf sidecar)",
                      "Speculative", &mtp_model_path);
+    parser.AddOption("", "--projection-vector", "PATH",
+                     "Optional llama.cpp control-vector GGUF for the runtime "
+                     "residual projection (Qwen3.8-Flash-Next; off unless "
+                     "loaded, then per-request)",
+                     "Model", &projection_vector_path);
+    parser.AddOption("", "--projection-layers", "LO-HI",
+                     "Steered layer range for --projection-vector (default: "
+                     "every layer the vector carries)",
+                     "Model", &projection_layers);
     parser.AddOption(
         "-d", "--draft-tokens", "N",
         "Maximum speculative draft tokens evaluated per step (default: 7)",
@@ -1326,6 +1337,8 @@ int RunServe(std::span<const char* const> args) {
     std::string dspark_model_path;
     std::string mtp_model_path;
     std::string vision_model_path;
+    std::string projection_vector_path;
+    std::string projection_layers;
     std::size_t draft_tokens = 7;
     std::size_t min_draft_tokens = 1;
     std::size_t prefill_chunk_tokens =
@@ -1423,6 +1436,15 @@ int RunServe(std::span<const char* const> args) {
         "Path to the Qwen MTP draft GGUF (Qwen3.8-Flash-Next: the "
         "mtp-...-shared-*.gguf sidecar)",
         "Speculative", &mtp_model_path);
+    llm_parser.AddOption("", "--projection-vector", "PATH",
+                         "Optional llama.cpp control-vector GGUF for the "
+                         "runtime residual projection (Qwen3.8-Flash-Next; "
+                         "off unless loaded, then per-request)",
+                         "Model", &projection_vector_path);
+    llm_parser.AddOption("", "--projection-layers", "LO-HI",
+                         "Steered layer range for --projection-vector "
+                         "(default: every layer the vector carries)",
+                         "Model", &projection_layers);
     llm_parser.AddOption(
         "-d", "--draft-tokens", "N",
         "Maximum speculative draft tokens evaluated per step (default: 7)",
@@ -1609,6 +1631,10 @@ int RunServe(std::span<const char* const> args) {
       std::cerr << "Error: --model <PATH> is required\n";
       return 2;
     }
+    if (!projection_layers.empty() && projection_vector_path.empty()) {
+      std::cerr << "Error: --projection-layers requires --projection-vector\n";
+      return 2;
+    }
     std::string err;
     ModelLoadLog load_log("text", model);
     backend = std::make_shared<server::InferenceBackend>();
@@ -1644,7 +1670,8 @@ int RunServe(std::span<const char* const> args) {
             .staging_capacity_bytes = cache_disk_staging_bytes,
             .model_artifact_fingerprint = {},
         },
-        vision_model_path, cache_ram, enable_yarn);
+        vision_model_path, cache_ram, enable_yarn, projection_vector_path,
+        projection_layers);
     loading.stop();
     if (!load_ok) {
       std::cerr << "Error loading model '" << model << "': " << err << "\n";
